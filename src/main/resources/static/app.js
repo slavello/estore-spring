@@ -64,6 +64,7 @@ const RESOURCES = {
     employees: {
         title: 'Сотрудники',
         endpoint: '/api/employees',
+        importUrl: '/api/import/employees',
         columns: [
             { key: 'lastName', label: 'Фамилия' },
             { key: 'firstName', label: 'Имя' },
@@ -89,12 +90,13 @@ const RESOURCES = {
     electronics: {
         title: 'Электротовары',
         endpoint: '/api/electronics',
+        importUrl: '/api/import/electronics',
         columns: [
             { key: 'name', label: 'Название' },
             { key: 'typeName', label: 'Тип' },
             { key: 'price', label: 'Цена, руб.', fmt: fmtMoney },
             { key: 'quantity', label: 'Кол-во' },
-            { key: 'archived', label: 'В продаже', fmt: v => v === true ? '— (архив)' : 'да' },
+            { key: 'archived', label: 'В продаже', fmt: v => v === true ? 'нет' : 'да' },
             { key: 'description', label: 'Описание', truncate: 80 }
         ],
         fields: [
@@ -109,6 +111,7 @@ const RESOURCES = {
     purchases: {
         title: 'Покупки',
         endpoint: '/api/purchases',
+        importUrl: '/api/import/purchases',
         sortable: [
             { v: 'dateTime,desc', l: 'Дата покупки ↓ (сначала новые)' },
             { v: 'dateTime,asc', l: 'Дата покупки ↑ (сначала старые)' }
@@ -132,6 +135,7 @@ const RESOURCES = {
     stocks: {
         title: 'Наличие товаров в магазинах',
         endpoint: '/api/stock',
+        importUrl: '/api/import/stock',
         columns: [
             { key: 'electronicsName', label: 'Товар' },
             { key: 'shopName', label: 'Магазин' },
@@ -144,12 +148,13 @@ const RESOURCES = {
         ],
         noEdit: false
     },
-    positions: dictSection('Должности', '/api/positions'),
-    etypes: dictSection('Типы электроники', '/api/electronics-types'),
-    ptypes: dictSection('Типы покупок', '/api/purchase-types'),
+    positions: dictSection('Должности', '/api/positions', '/api/import/positions'),
+    etypes: dictSection('Типы электроники', '/api/electronics-types', '/api/import/electronics-types'),
+    ptypes: dictSection('Типы покупок', '/api/purchase-types', '/api/import/purchase-types'),
     shops: {
         title: 'Магазины',
         endpoint: '/api/shops',
+        importUrl: '/api/import/shops',
         columns: [
             { key: 'name', label: 'Наименование' },
             { key: 'address', label: 'Адрес', truncate: 120 }
@@ -161,10 +166,11 @@ const RESOURCES = {
     }
 };
 
-function dictSection(title, endpoint) {
+function dictSection(title, endpoint, importUrl) {
     return {
         title: title,
         endpoint: endpoint,
+        importUrl: importUrl,
         columns: [{ key: 'name', label: 'Наименование' }],
         fields: [{ name: 'name', label: 'Наименование', type: 'text', required: true, max: 150 }]
     };
@@ -193,9 +199,25 @@ function buildSections() {
 
         const addBtn = document.createElement('button');
         addBtn.className = 'primary';
-        addBtn.textContent = '＋ Добавить';
+        addBtn.textContent = '+ Добавить';
         addBtn.onclick = () => openDialog(key, null);
         toolbar.appendChild(addBtn);
+
+        // импорт CSV-файла для этой таблицы
+        if (cfg.importUrl) {
+            const importBtn = document.createElement('button');
+            importBtn.className = 'secondary';
+            importBtn.title = 'Импортировать записи из CSV-файла';
+            importBtn.textContent = '⇩ Импорт CSV';
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.csv,text/csv';
+            fileInput.style.display = 'none';
+            importBtn.onclick = () => fileInput.click();
+            fileInput.onchange = () => importCsv(key, fileInput);
+            toolbar.appendChild(importBtn);
+            toolbar.appendChild(fileInput);
+        }
 
         const sizeWrap = document.createElement('label');
         sizeWrap.className = 'muted';
@@ -232,6 +254,11 @@ function buildSections() {
         const tableWrap = document.createElement('div');
         tableWrap.id = 'table-' + key;
         section.appendChild(tableWrap);
+
+        // результат импорта CSV
+        const csvResult = document.createElement('div');
+        csvResult.id = 'csv-result-' + key;
+        section.appendChild(csvResult);
 
         // пагинация
         const pager = document.createElement('div');
@@ -375,7 +402,7 @@ async function openDialog(key, dto, editId) {
                 const items = await loadSelectOptions(f.url);
                 const empty = document.createElement('option');
                 empty.value = '';
-                empty.textContent = '— выберите —';
+                empty.textContent = '- выберите -';
                 input.appendChild(empty);
                 items.forEach(item => {
                     const o = document.createElement('option');
@@ -384,13 +411,13 @@ async function openDialog(key, dto, editId) {
                     input.appendChild(o);
                 });
             } catch (e) {
-                toast('Не удалось загрузить справочник для поля «' + f.label + '»: ' + e.message, 'err');
+                toast('Не удалось загрузить справочник для поля \"' + f.label + '\": ' + e.message, 'err');
             }
         } else if (f.type === 'select-static') {
             input = document.createElement('select');
             const empty = document.createElement('option');
             empty.value = '';
-            empty.textContent = '— выберите —';
+            empty.textContent = '- выберите -';
             input.appendChild(empty);
             f.options.forEach(o => {
                 const op = document.createElement('option');
@@ -467,7 +494,7 @@ async function submitDialog() {
     // простая клиентская проверка обязательных полей
     for (const f of cfg.fields) {
         if (f.required && (body[f.name] === null || body[f.name] === undefined || body[f.name] === '')) {
-            toast('Заполните поле «' + f.label + '»', 'err');
+            toast('Заполните поле \"' + f.label + '\"', 'err');
             return;
         }
     }
@@ -586,11 +613,36 @@ function initImport() {
 }
 
 function renderImportResult(result) {
-    const out = document.getElementById('import-result');
+    document.getElementById('import-result').innerHTML = renderImportReportHtml(result);
+}
+
+async function importCsv(key, input) {
+    if (!input.files || !input.files.length) return;
+    const cfg = RESOURCES[key];
+    const out = document.getElementById('csv-result-' + key);
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    input.value = '';
+    try {
+        const result = await api(cfg.importUrl, { method: 'POST', body: fd });
+        out.innerHTML = renderImportReportHtml(result);
+        if (result.success !== false) {
+            toast(result.message || 'Импорт выполнен', 'ok');
+        } else {
+            toast(result.message || 'Импорт выполнен с ошибками', 'err');
+        }
+        state[key].page = 0;
+        loadList(key);
+    } catch (e) {
+        toast('Ошибка импорта: ' + e.message, 'err');
+        out.innerHTML = '';
+    }
+}
+
+function renderImportReportHtml(result) {
     let html = `<div class="import-report"><p><b>${esc(result.message || '')}</b></p>`;
-    if (result.message && !result.files) {
-        out.innerHTML = html + '</div>';
-        return;
+    if (result.message && !(result.files && result.files.length)) {
+        return html + '</div>';
     }
     (result.files || []).forEach(f => {
         html += `<p><b>${esc(f.file)}</b>: добавлено ${f.added}, обновлено ${f.updated}, ошибок ${f.skippedErrors}</p>`;
@@ -598,7 +650,7 @@ function renderImportResult(result) {
             html += '<ul>' + f.errors.map(e => `<li style="color:#dc2626">${esc(e)}</li>`).join('') + '</ul>';
         }
     });
-    out.innerHTML = html + '</div>';
+    return html + '</div>';
 }
 
 // ============================== ИНИЦИАЛИЗАЦИЯ ==============================

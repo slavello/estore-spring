@@ -33,13 +33,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -74,6 +68,8 @@ public class CsvImportService {
     /** Соответствие идентификаторов из CSV реально сохранённым записям текущего импорта */
     private final Map<Class<?>, Map<Long, Object>> idMappings = new HashMap<>();
 
+    private final Map<String, TableStep> steps;
+
     public CsvImportService(
         PositionRepository positions,
         ShopRepository shops,
@@ -94,6 +90,8 @@ public class CsvImportService {
         this.stocks = stocks;
         this.purchases = purchases;
         this.purchaseService = purchaseService;
+
+        this.steps = steps();
     }
 
     @Transactional
@@ -163,7 +161,7 @@ public class CsvImportService {
             TableStep step = findStep(tableName);
             if (step == null) {
                 throw new IllegalArgumentException(
-                    "Неизвестная таблица «" + tableName + "». Доступные таблицы: " + stepNames());
+                    "Неизвестная таблица \"" + tableName + "\". Доступные таблицы: " + stepNames());
             }
             String fileName = fileNameOrFallback(file);
             idMappings.clear();
@@ -197,7 +195,7 @@ public class CsvImportService {
     // ---- обработка файлов ----
 
     private void process(Map<String, List<String>> filesByName, ImportResultDto result) {
-        for (TableStep step : steps()) {
+        for (TableStep step : steps.values()) {
             String key = findFileKey(filesByName, step);
             if (key == null) {
                 continue; // файла нет в архиве — шаг пропускается
@@ -227,42 +225,42 @@ public class CsvImportService {
      * Реестр шагов импорта.
      * Порядок соответствует внешним ключам: сначала справочники, затем реестры.
      */
-    private List<TableStep> steps() {
-        List<TableStep> list = new ArrayList<>();
-        list.add(new TableStep("positions",
-            List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions));
-        list.add(new TableStep("shops",
-            List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops));
-        list.add(new TableStep("electronics_types",
-            List.of(
-                "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
-                "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
-            this::handleElectronicsTypes));
-        list.add(new TableStep("purchase_types",
-            List.of(
-                "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
-                "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
-            this::handlePurchaseTypes));
-        list.add(new TableStep("employees",
-            List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees));
-        list.add(new TableStep("electronics",
-            List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
-            this::handleElectronics));
-        list.add(new TableStep("stocks",
-            List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
-            this::handleStocks));
-        list.add(new TableStep("purchases",
-            List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases));
-        return list;
+    private Map<String, TableStep> steps() {
+        return Map.of(
+            "positions", new TableStep("positions",
+                List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
+            "shops", new TableStep("shops",
+                List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
+            "electronics_types", new TableStep("electronics_types",
+                List.of(
+                    "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
+                    "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
+                this::handleElectronicsTypes),
+            "purchase_types", new TableStep("purchase_types",
+                List.of(
+                    "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
+                    "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
+                this::handlePurchaseTypes),
+            "employees", new TableStep("employees",
+                List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
+            "electronics", new TableStep("electronics",
+                List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
+                this::handleElectronics),
+            "stocks", new TableStep("stocks",
+                List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
+                this::handleStocks),
+            "purchases", new TableStep("purchases",
+                List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
+        );
     }
 
     private String stepNames() {
         StringBuilder sb = new StringBuilder();
-        for (TableStep s : steps()) {
+        for (String name : steps.keySet()) {
             if (sb.length() > 0) {
                 sb.append(", ");
             }
-            sb.append(s.name);
+            sb.append(name);
         }
         return sb.toString();
     }
@@ -270,7 +268,8 @@ public class CsvImportService {
     /** Поиск шага по каноническому имени или алиасу таблицы */
     private TableStep findStep(String tableName) {
         String normalized = normalizeFileName(tableName == null ? "" : tableName);
-        for (TableStep s : steps()) {
+        //return steps.get(normalized);
+        for (TableStep s : steps.values()) {
             if (s.aliases.contains(normalized)) {
                 return s;
             }
