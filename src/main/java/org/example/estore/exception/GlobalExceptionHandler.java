@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
             .getBindingResult()
             .getFieldErrors()
             .stream()
-            .map(f -> fieldMessage(f))
+            .map(this::fieldMessage)
             .collect(Collectors.joining("; "));
         return ResponseEntity
             .badRequest()

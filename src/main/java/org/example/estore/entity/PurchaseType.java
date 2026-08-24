@@ -18,8 +18,7 @@ public class PurchaseType {
     @Column(nullable = false, length = 150)
     private String name;
 
-    public PurchaseType() {
-    }
+    public PurchaseType() {}
 
     public PurchaseType(String name) {
         this.name = name;

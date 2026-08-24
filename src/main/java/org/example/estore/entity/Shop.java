@@ -21,8 +21,7 @@ public class Shop {
     @Column(columnDefinition = "text")
     private String address;
 
-    public Shop() {
-    }
+    public Shop() {}
 
     public Shop(String name, String address) {
         this.name = name;
