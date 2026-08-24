@@ -34,7 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,13 +45,15 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Импорт данных из zip-архива с CSV-файлами.
+ * Импорт данных из zip-архива с CSV-файлами либо одиночного CSV-файла
+ * для конкретной таблицы.
  * <p>
- * Имена файлов внутри архива распознаются по алиасам (например, positions.csv,
- * сотрудники.csv, shops.csv и т.д.). Заголовки колонок распознаются на русском
- * и английском языках, в том числе варианты с суффиксом «_ID». Справочники
- * сопоставляются по наименованию (обновляются), записи реестров добавляются.
- * Ссылки могут задаваться идентификатором строки этого же импорта или наименованием.
+ * Имена файлов внутри архива и названия таблиц распознаются по алиасам
+ * (например, positions.csv, сотрудники.csv, shops.csv и т.д.). Заголовки колонок
+ * распознаются на русском и английском языках, в том числе варианты с суффиксом
+ * «_ID». Справочники сопоставляются по наименованию (обновляются), записи реестров
+ * добавляются. Ссылки могут задаваться идентификатором строки этого же импорта
+ * или наименованием.
  */
 @Service
 public class CsvImportService {
@@ -144,67 +145,167 @@ public class CsvImportService {
         }
     }
 
+    /**
+     * Импорт одиночного CSV-файла для конкретной таблицы.
+     *
+     * @param file      CSV-файл (multipart, поле "file")
+     * @param tableName каноническое имя или алиас таблицы:
+     *                  positions, shops, electronics_types, purchase_types,
+     *                  employees, electronics, stocks, purchases
+     */
+    @Transactional
+    public ImportResultDto importCsv(MultipartFile file, String tableName) {
+        ImportResultDto result = new ImportResultDto();
+        try {
+            if (file == null || file.isEmpty()) {
+                throw new IllegalArgumentException("Файл не передан или пуст");
+            }
+            TableStep step = findStep(tableName);
+            if (step == null) {
+                throw new IllegalArgumentException(
+                    "Неизвестная таблица «" + tableName + "». Доступные таблицы: " + stepNames());
+            }
+            String fileName = fileNameOrFallback(file);
+            idMappings.clear();
+            TableData table = parseTable(fileName, readCsvLines(file.getInputStream()));
+            ImportResultDto.FileReport report = ImportResultDto.fileReport(fileName);
+            result.getFiles().add(report);
+            if (!table.errors.isEmpty()) {
+                report.getErrors().addAll(table.errors);
+            } else {
+                step.handler.handle(table, report);
+            }
+            result.setMessage(
+                String.format(
+                    "Импорт таблицы «%s» завершён: добавлено %d, обновлено %d, пропущено с ошибками %d.",
+                    step.name, report.getAdded(), report.getUpdated(), report.getSkippedErrors()));
+            result.setSuccess(report.getSkippedErrors() == 0 && report.getErrors().isEmpty());
+            return result;
+        } catch (IllegalArgumentException e) {
+            result.setSuccess(false);
+            result.setMessage(e.getMessage());
+            return result;
+        } catch (IOException e) {
+            result.setSuccess(false);
+            result.setMessage("Ошибка чтения файла: " + e.getMessage());
+            return result;
+        } finally {
+            idMappings.clear();
+        }
+    }
+
     // ---- обработка файлов ----
 
     private void process(Map<String, List<String>> filesByName, ImportResultDto result) {
-        step(filesByName, result, "positions",
-             Arrays.asList("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions);
-        step(filesByName, result, "shops",
-             Arrays.asList("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops);
-        step(filesByName, result, "electronics_types",
-             Arrays.asList(
-                 "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
-                 "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
-             this::handleElectronicsTypes);
-        step(filesByName, result, "purchase_types",
-             Arrays.asList(
-                 "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
-                 "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
-             this::handlePurchaseTypes);
-        step(filesByName, result, "employees",
-             Arrays.asList("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees);
-        step(filesByName, result, "electronics",
-             Arrays.asList("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
-             this::handleElectronics);
-        step(filesByName, result, "stocks",
-             Arrays.asList("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
-             this::handleStocks);
-        step(filesByName, result, "purchases",
-             Arrays.asList("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases);
+        for (TableStep step : steps()) {
+            String key = findFileKey(filesByName, step);
+            if (key == null) {
+                continue; // файла нет в архиве — шаг пропускается
+            }
+            runStep(step, key, parseTable(key, filesByName.get(key)), result);
+        }
     }
 
     private interface TableHandler {
         void handle(TableData table, ImportResultDto.FileReport report);
     }
 
-    private void step(
-        Map<String, List<String>> filesByName, ImportResultDto result,
-        String canonicalName, List<String> aliases, TableHandler handler)
-    {
-        String key = null;
-        for (String name : filesByName.keySet()) {
-            if (aliases.contains(normalizeFileName(name))) {
-                key = name;
-                break;
+    /** Шаг импорта: каноническое имя таблицы, алиасы имён файла и обработчик */
+    private static class TableStep {
+        final String name;
+        final List<String> aliases;
+        final TableHandler handler;
+
+        TableStep(String name, List<String> aliases, TableHandler handler) {
+            this.name = name;
+            this.aliases = aliases;
+            this.handler = handler;
+        }
+    }
+
+    /**
+     * Реестр шагов импорта.
+     * Порядок соответствует внешним ключам: сначала справочники, затем реестры.
+     */
+    private List<TableStep> steps() {
+        List<TableStep> list = new ArrayList<>();
+        list.add(new TableStep("positions",
+            List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions));
+        list.add(new TableStep("shops",
+            List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops));
+        list.add(new TableStep("electronics_types",
+            List.of(
+                "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
+                "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
+            this::handleElectronicsTypes));
+        list.add(new TableStep("purchase_types",
+            List.of(
+                "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
+                "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
+            this::handlePurchaseTypes));
+        list.add(new TableStep("employees",
+            List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees));
+        list.add(new TableStep("electronics",
+            List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
+            this::handleElectronics));
+        list.add(new TableStep("stocks",
+            List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
+            this::handleStocks));
+        list.add(new TableStep("purchases",
+            List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases));
+        return list;
+    }
+
+    private String stepNames() {
+        StringBuilder sb = new StringBuilder();
+        for (TableStep s : steps()) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(s.name);
+        }
+        return sb.toString();
+    }
+
+    /** Поиск шага по каноническому имени или алиасу таблицы */
+    private TableStep findStep(String tableName) {
+        String normalized = normalizeFileName(tableName == null ? "" : tableName);
+        for (TableStep s : steps()) {
+            if (s.aliases.contains(normalized)) {
+                return s;
             }
         }
-        if (key == null) {
-            return; // файла нет в архиве — шаг пропускается
+        return null;
+    }
+
+    private String fileNameOrFallback(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        return name == null || name.trim().isEmpty() ? "data.csv" : name;
+    }
+
+    private String findFileKey(Map<String, List<String>> filesByName, TableStep step) {
+        for (String name : filesByName.keySet()) {
+            if (step.aliases.contains(normalizeFileName(name))) {
+                return name;
+            }
         }
-        TableData table = parseTable(key, filesByName.get(key));
-        ImportResultDto.FileReport report = ImportResultDto.fileReport(key);
+        return null;
+    }
+
+    private void runStep(TableStep step, String fileName, TableData table, ImportResultDto result) {
+        ImportResultDto.FileReport report = ImportResultDto.fileReport(fileName);
         result.getFiles().add(report);
         if (!table.errors.isEmpty()) {
             report.getErrors().addAll(table.errors);
             return;
         }
-        handler.handle(table, report);
+        step.handler.handle(table, report);
     }
 
     // ---- обработчики таблиц ----
 
     private void handlePositions(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("НАИМЕНОВАНИЕ"))) {
+        if (!requireColumns(t, r, List.of("НАИМЕНОВАНИЕ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -228,7 +329,7 @@ public class CsvImportService {
     }
 
     private void handleShops(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("НАИМЕНОВАНИЕ"))) {
+        if (!requireColumns(t, r, List.of("НАИМЕНОВАНИЕ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -253,7 +354,7 @@ public class CsvImportService {
     }
 
     private void handleElectronicsTypes(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("НАИМЕНОВАНИЕ"))) {
+        if (!requireColumns(t, r, List.of("НАИМЕНОВАНИЕ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -279,7 +380,7 @@ public class CsvImportService {
     }
 
     private void handlePurchaseTypes(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("НАИМЕНОВАНИЕ"))) {
+        if (!requireColumns(t, r, List.of("НАИМЕНОВАНИЕ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -306,7 +407,7 @@ public class CsvImportService {
 
     private void handleEmployees(TableData t, ImportResultDto.FileReport r) {
         if (!requireColumns(t, r,
-            Arrays.asList("ФАМИЛИЯ", "ИМЯ", "ДАТАРОЖДЕНИЯ", "ДОЛЖНОСТЬ", "МАГАЗИН", "ПОЛ"))) {
+            List.of("ФАМИЛИЯ", "ИМЯ", "ДАТАРОЖДЕНИЯ", "ДОЛЖНОСТЬ", "МАГАЗИН", "ПОЛ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -348,7 +449,7 @@ public class CsvImportService {
     }
 
     private void handleElectronics(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("НАЗВАНИЕ", "ТИП"))) {
+        if (!requireColumns(t, r, List.of("НАЗВАНИЕ", "ТИП"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -362,7 +463,7 @@ public class CsvImportService {
                     resolveRef(
                         required(val(t, row, "ТИП"), "ТИП"),
                         "Тип электроники",
-                        id -> electronicsTypes.findById(id),
+                        electronicsTypes::findById,
                         electronicsTypes::findByNameIgnoreCase,
                         ElectronicsType.class));
                 BigDecimal price = parseDecimal(val(t, row, "ЦЕНА"), "Цена");
@@ -392,7 +493,7 @@ public class CsvImportService {
     }
 
     private void handleStocks(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("ЭЛЕКТРОТОВАР", "МАГАЗИН", "КОЛИЧЕСТВО"))) {
+        if (!requireColumns(t, r, List.of("ЭЛЕКТРОТОВАР", "МАГАЗИН", "КОЛИЧЕСТВО"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -401,12 +502,12 @@ public class CsvImportService {
                 Electronics el = resolveRef(
                     required(val(t, row, "ЭЛЕКТРОТОВАР"), "ЭЛЕКТРОТОВАР"),
                     "Электротовар",
-                    id -> electronics.findById(id), electronics::findByNameIgnoreCase,
+                    electronics::findById, electronics::findByNameIgnoreCase,
                     Electronics.class);
                 Shop shop = resolveRef(
                     required(val(t, row, "МАГАЗИН"), "МАГАЗИН"),
                     "Магазин",
-                    id -> shops.findById(id),
+                    shops::findById,
                     shops::findByNameIgnoreCase,
                     Shop.class);
                 Integer qty = parseInt(required(val(t, row, "КОЛИЧЕСТВО"), "КОЛИЧЕСТВО"), "Количество");
@@ -431,7 +532,7 @@ public class CsvImportService {
     }
 
     private void handlePurchases(TableData t, ImportResultDto.FileReport r) {
-        if (!requireColumns(t, r, Arrays.asList("ЭЛЕКТРОТОВАР", "СОТРУДНИК", "МАГАЗИН", "ТИППОКУПКИ"))) {
+        if (!requireColumns(t, r, List.of("ЭЛЕКТРОТОВАР", "СОТРУДНИК", "МАГАЗИН", "ТИППОКУПКИ"))) {
             return;
         }
         for (int i = 0; i < t.rows.size(); i++) {
@@ -440,21 +541,23 @@ public class CsvImportService {
                 Electronics el = resolveRef(
                     required(val(t, row, "ЭЛЕКТРОТОВАР"), "ЭЛЕКТРОТОВАР"),
                     "Электротовар",
-                    id -> electronics.findById(id),
+                    electronics::findById,
                     electronics::findByNameIgnoreCase,
                     Electronics.class);
-                Employee emp = resolveRef(required(val(t, row, "СОТРУДНИК"), "СОТРУДНИК"),
-                        "Сотрудник",
-                        id -> employees.findById(id), employees::findByLastNameIgnoreCase,
-                        Employee.class);
+                Employee emp = resolveRef(
+                    required(val(t, row, "СОТРУДНИК"), "СОТРУДНИК"),
+                    "Сотрудник",
+                    employees::findById,
+                    employees::findByLastNameIgnoreCase,
+                    Employee.class);
                 Shop shop = resolveRef(
                     required(val(t, row, "МАГАЗИН"), "МАГАЗИН"), "Магазин",
-                    id -> shops.findById(id),
+                    shops::findById,
                     shops::findByNameIgnoreCase,
                     Shop.class);
                 PurchaseType pt = resolveRef(required(val(t, row, "ТИППОКУПКИ"), "ТИППОКУПКИ"),
                     "Тип покупки",
-                    id -> purchaseTypes.findById(id),
+                    purchaseTypes::findById,
                     purchaseTypes::findByNameIgnoreCase,
                     PurchaseType.class);
                 LocalDateTime dt = Dates.parseDateTime(val(t, row, "ДАТАПОКУПКИ"));
@@ -509,6 +612,19 @@ public class CsvImportService {
             }
         }
         return files;
+    }
+
+    /** Чтение одиночного CSV-файла: байты -> текст (UTF-8/CP1251) -> непустые строки */
+    private List<String> readCsvLines(InputStream in) throws IOException {
+        byte[] bytes = readAll(in, MAX_ENTRY_BYTES);
+        String content = decode(bytes);
+        List<String> lines = new ArrayList<>();
+        for (String line : content.split("\\r?\\n")) {
+            if (!line.trim().isEmpty()) {
+                lines.add(line);
+            }
+        }
+        return lines;
     }
 
     private byte[] readAll(InputStream in, long limit) throws IOException {
