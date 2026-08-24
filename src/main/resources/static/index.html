@@ -1,0 +1,117 @@
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Store — сеть магазинов электроники</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="logo">E&#8209;Store</span>
+        <span class="subtitle">сеть магазинов электроники</span>
+    </div>
+    <nav class="top-links">
+        <a href="/swagger-ui.html" target="_blank" rel="noopener">Swagger API</a>
+        <a href="/v3/api-docs" target="_blank" rel="noopener">OpenAPI JSON</a>
+    </nav>
+</header>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="nav-group">Реестры</div>
+        <button class="nav-item active" data-section="employees">Сотрудники</button>
+        <button class="nav-item" data-section="electronics">Электротовары</button>
+        <button class="nav-item" data-section="purchases">Покупки</button>
+        <button class="nav-item" data-section="stocks">Наличие в магазинах</button>
+
+        <div class="nav-group">Справочники</div>
+        <button class="nav-item" data-section="positions">Должности</button>
+        <button class="nav-item" data-section="etypes">Типы электроники</button>
+        <button class="nav-item" data-section="shops">Магазины</button>
+        <button class="nav-item" data-section="ptypes">Типы покупок</button>
+
+        <div class="nav-group">Функционал</div>
+        <button class="nav-item" data-section="reports">Отчёты</button>
+        <button class="nav-item" data-section="import">Импорт данных (ZIP)</button>
+    </aside>
+
+    <main class="content">
+        <!-- секции реестров/справочников строятся скриптом -->
+        <div id="sections"></div>
+
+        <!-- ОТЧЁТЫ -->
+        <section id="section-reports" class="section hidden">
+            <h2>Отчёты</h2>
+
+            <div class="card">
+                <h3>Лучшие сотрудники по должности <span class="muted">(за последний год — последние 12 месяцев)</span></h3>
+                <div class="row">
+                    <label>Критерий:
+                        <select id="best-criterion">
+                            <option value="count">Количество проданных товаров за последний год</option>
+                            <option value="sum">Сумма проданных товаров за последний год, руб.</option>
+                        </select>
+                    </label>
+                    <button id="btn-best" class="primary">Показать</button>
+                </div>
+                <div id="best-result"></div>
+            </div>
+
+            <div class="card">
+                <h3>Лучший младший продавец-консультант по продаже умных часов</h3>
+                <div class="row">
+                    <button id="btn-watch" class="primary">Показать</button>
+                </div>
+                <div id="watch-result"></div>
+            </div>
+
+            <div class="card">
+                <h3>Сумма денежных средств, полученная через оплату наличными</h3>
+                <div class="row">
+                    <label>Магазин:
+                        <select id="cash-shop"><option value="">— Вся сеть —</option></select>
+                    </label>
+                    <button id="btn-cash" class="primary">Показать</button>
+                </div>
+                <div id="cash-result"></div>
+            </div>
+        </section>
+
+        <!-- ИМПОРТ -->
+        <section id="section-import" class="section hidden">
+            <h2>Импорт данных из zip-архива с CSV-файлами</h2>
+            <div class="card">
+                <p class="muted">
+                    Загрузите zip-архив с CSV-файлами (разделитель «;» или «,», кодировка UTF-8 или Windows-1251).
+                    Ожидаемые имена файлов и формат колонок — см. папку <code>sample-data</code> проекта:
+                    positions.csv, shops.csv, electronics_types.csv, purchase_types.csv,
+                    employees.csv, electronics.csv, stocks.csv, purchases.csv.
+                    Справочники сопоставляются по наименованию, записи реестров добавляются.
+                </p>
+                <div class="row">
+                    <input type="file" id="import-file" accept=".zip">
+                    <button id="btn-import" class="primary">Импортировать</button>
+                </div>
+                <div id="import-result"></div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<dialog id="edit-dialog">
+    <form id="edit-form" method="dialog">
+        <h3 id="dialog-title">Запись</h3>
+        <div id="dialog-fields"></div>
+        <div class="dialog-actions">
+            <button type="button" id="btn-cancel" class="secondary">Отмена</button>
+            <button type="submit" id="btn-save" class="primary">Сохранить</button>
+        </div>
+    </form>
+</dialog>
+
+<div id="toasts"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
