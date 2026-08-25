@@ -46,7 +46,7 @@ public class ImportResultDto {
         private int added;
         private int updated;
         private int skippedErrors;
-        private List<String> errors = new ArrayList<>();
+        private final List<String> errors = new ArrayList<>();
 
         public FileReport(String file) {
             this.file = file;

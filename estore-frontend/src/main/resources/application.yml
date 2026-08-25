@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: estore-frontend
+
+server:
+  port: ${PORT:8081}

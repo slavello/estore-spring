@@ -2,6 +2,10 @@
 
 // ============================== УТИЛИТЫ ==============================
 
+// Адрес бэкенда (estore-backend). Можно переопределить до загрузки app.js:
+// <script>window.API_BASE = 'http://my-host:8080'</script>
+const API_BASE = (window.API_BASE || 'http://localhost:8080').replace(/\/+$/, '');
+
 const moneyFmt = new Intl.NumberFormat('ru-RU', {
     style: 'currency', currency: 'RUB', maximumFractionDigits: 2
 });
@@ -33,7 +37,7 @@ async function api(url, options = {}) {
     if (opts.body && !(opts.body instanceof FormData)) {
         opts.headers['Content-Type'] = 'application/json';
     }
-    const res = await fetch(url, opts);
+    const res = await fetch(API_BASE + url, opts);
     if (!res.ok) {
         let msg = 'Ошибка ' + res.status;
         try {
@@ -536,7 +540,8 @@ function initReports() {
         const out = document.getElementById('best-result');
         try {
             let url = '/api/reports/best-employees?criterion=' + criterion;
-            if (bestSince.value) url += '&startDate=' + bestSince.value;
+            const since = document.getElementById('best-since').value;
+            if (since) url += '&startDate=' + since;
             const rows = await api(url);
             out.innerHTML = renderBestEmployees(rows);
         } catch (e) {

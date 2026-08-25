@@ -85,7 +85,7 @@ public class PurchaseService {
     @Transactional
     public PurchaseDto update(Long id, PurchaseDto d) {
         Purchase p = find(id);
-        //releaseSale(p.getElectronics(), p.getShop());
+        releaseSale(p.getElectronics(), p.getShop());
 
         p.setElectronics(resolveElectronics(d.getElectronicsId()));
         p.setEmployee(resolveEmployee(d.getEmployeeId()));
@@ -94,7 +94,7 @@ public class PurchaseService {
         if (d.getDateTime() != null) {
             p.setDateTime(d.getDateTime());
         }
-        //registerSale(p.getElectronics(), p.getShop());
+        registerSale(p.getElectronics(), p.getShop());
         return toDto(purchases.save(p));
     }
 
