@@ -35,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -68,7 +69,8 @@ public class CsvImportService {
     /** Соответствие идентификаторов из CSV реально сохранённым записям текущего импорта */
     private final Map<Class<?>, Map<Long, Object>> idMappings = new HashMap<>();
 
-    private final Map<String, TableStep> steps;
+    private final Map<String, TableStep> stepsMap;
+    private final List<TableStep> stepsList;
 
     public CsvImportService(
         PositionRepository positions,
@@ -91,7 +93,10 @@ public class CsvImportService {
         this.purchases = purchases;
         this.purchaseService = purchaseService;
 
-        this.steps = steps();
+        this.stepsList = makeSteps();
+        this.stepsMap = this.stepsList.stream().collect(Collectors.toMap(
+            s -> s.name, s -> s
+        ));
     }
 
     @Transactional
@@ -195,7 +200,7 @@ public class CsvImportService {
     // ---- обработка файлов ----
 
     private void process(Map<String, List<String>> filesByName, ImportResultDto result) {
-        for (TableStep step : steps.values()) {
+        for (TableStep step : stepsList) {
             String key = findFileKey(filesByName, step);
             if (key == null) {
                 continue; // файла нет в архиве — шаг пропускается
@@ -225,38 +230,38 @@ public class CsvImportService {
      * Реестр шагов импорта.
      * Порядок соответствует внешним ключам: сначала справочники, затем реестры.
      */
-    private Map<String, TableStep> steps() {
-        return Map.of(
-            "positions", new TableStep("positions",
+    private List<TableStep> makeSteps() {
+        return List.of(
+            new TableStep("positions",
                 List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
-            "shops", new TableStep("shops",
+            new TableStep("shops",
                 List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
-            "electronics_types", new TableStep("electronics_types",
+            new TableStep("electronics_types",
                 List.of(
                     "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
                     "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
                 this::handleElectronicsTypes),
-            "purchase_types", new TableStep("purchase_types",
+            new TableStep("purchase_types",
                 List.of(
                     "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
                     "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
                 this::handlePurchaseTypes),
-            "employees", new TableStep("employees",
+            new TableStep("employees",
                 List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
-            "electronics", new TableStep("electronics",
+            new TableStep("electronics",
                 List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
                 this::handleElectronics),
-            "stocks", new TableStep("stocks",
+            new TableStep("stocks",
                 List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
                 this::handleStocks),
-            "purchases", new TableStep("purchases",
+            new TableStep("purchases",
                 List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
         );
     }
 
     private String stepNames() {
         StringBuilder sb = new StringBuilder();
-        for (String name : steps.keySet()) {
+        for (String name : stepsMap.keySet()) {
             if (sb.length() > 0) {
                 sb.append(", ");
             }
@@ -267,9 +272,12 @@ public class CsvImportService {
 
     /** Поиск шага по каноническому имени или алиасу таблицы */
     private TableStep findStep(String tableName) {
-        String normalized = normalizeFileName(tableName == null ? "" : tableName);
-        //return steps.get(normalized);
-        for (TableStep s : steps.values()) {
+        if (tableName == null) {
+            return null;
+        }
+        String normalized = normalizeFileName(tableName);
+        // return stepsMap.get(normalized);
+        for (TableStep s : stepsList) {
             if (s.aliases.contains(normalized)) {
                 return s;
             }

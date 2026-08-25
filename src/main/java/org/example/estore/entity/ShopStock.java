@@ -28,6 +28,14 @@ public class ShopStock {
     @Min(0)
     private Integer quantity;
 
+    public ShopStock() {}
+
+    public ShopStock(Electronics p, Shop s, int qty) {
+        this.electronics = p;
+        this.shop = s;
+        this.quantity = qty;
+    }
+
     public Long getId() {
         return id;
     }

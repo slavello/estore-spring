@@ -36,6 +36,16 @@ public class Purchase {
     @JoinColumn(name = "purchase_type_id", nullable = false)
     private PurchaseType purchaseType;
 
+    public Purchase() {}
+
+    public Purchase(Electronics p, Employee e, Shop s, PurchaseType t, LocalDateTime dt) {
+        this.electronics = p;
+        this.employee = e;
+        this.shop = s;
+        this.purchaseType = t;
+        this.dateTime = dt;
+    }
+
     public Long getId() {
         return id;
     }

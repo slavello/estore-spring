@@ -35,6 +35,17 @@ public class Electronics {
     @Column(columnDefinition = "text")
     private String description;
 
+    public Electronics() {}
+
+    public Electronics(String name, ElectronicsType type, String price, int qty, boolean archived, String desc) {
+        this.name = name;
+        this.type = type;
+        this.price = new BigDecimal(price);
+        this.quantity = qty;
+        this.archived = archived;
+        this.description = desc;
+    }
+
     public Long getId() {
         return id;
     }

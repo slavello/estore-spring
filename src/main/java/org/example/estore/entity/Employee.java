@@ -46,6 +46,18 @@ public class Employee {
     @Column(name = "male")
     private Boolean male;
 
+    public Employee() {}
+
+    public Employee(String last, String first, String middle, LocalDate birth, Position pos, Shop shop, boolean male) {
+        this.lastName = last;
+        this.firstName = first;
+        this.middleName = middle;
+        this.birthDate = birth;
+        this.position = pos;
+        this.shop = shop;
+        this.male = male;
+    }
+
     public Long getId() {
         return id;
     }
