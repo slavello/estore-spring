@@ -219,6 +219,17 @@ function buildSections() {
             toolbar.appendChild(fileInput);
         }
 
+        // обновление содержимого вкладки
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'secondary';
+        refreshBtn.title = 'Обновить данные с сервера';
+        refreshBtn.textContent = '⟳ Обновить';
+        refreshBtn.onclick = () => {
+            Object.keys(selectCache).forEach(u => delete selectCache[u]);
+            loadList(key);
+        };
+        toolbar.appendChild(refreshBtn);
+
         const sizeWrap = document.createElement('label');
         sizeWrap.className = 'muted';
         sizeWrap.innerHTML = 'Строк на странице: ';
