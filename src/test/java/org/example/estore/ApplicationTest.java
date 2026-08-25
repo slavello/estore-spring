@@ -151,11 +151,11 @@ class ApplicationTest {
 
     @Test
     void bestEmployeesReportsReturnData() {
-        List<BestEmployeeDto> byCount = reportService.bestEmployeesByPosition("count");
+        List<BestEmployeeDto> byCount = reportService.bestEmployeesByPosition("count", null);
         assertFalse(byCount.isEmpty());
         assertTrue(byCount.get(0).getSoldCount() > 0);
 
-        List<BestEmployeeDto> bySum = reportService.bestEmployeesByPosition("sum");
+        List<BestEmployeeDto> bySum = reportService.bestEmployeesByPosition("sum", null);
         assertFalse(bySum.isEmpty());
         assertTrue(bySum.get(0).getSoldSum().signum() > 0);
 
@@ -166,8 +166,11 @@ class ApplicationTest {
 
     @Test
     void bestSmartWatchSellerIsIvanov() {
-        List<BestEmployeeDto> sellers = reportService.bestSmartWatchSellers();
-        assertFalse(sellers.isEmpty(), "должен найтись лучший продавец умных часов");
+        Electronics appleWatch = electronics.findByNameIgnoreCase("Apple Watch Series 9").orElseThrow();
+        Position junior = positions.findByNameIgnoreCase("Младший продавец-консультант").orElseThrow();
+
+        List<BestEmployeeDto> sellers = reportService.bestProductSellers(appleWatch.getId(), junior.getId(), null);
+        assertFalse(sellers.isEmpty(), "должен найтись лучший продавец Apple Watch");
         assertTrue(sellers.get(0).getFullName().startsWith("Иванов"),
             "лучшим должен быть Иванов, получено: " + sellers.get(0).getFullName());
         if (sellers.size() > 1) {
@@ -178,14 +181,24 @@ class ApplicationTest {
 
     @Test
     void cashTotalIsPositive() {
-        CashTotalDto total = reportService.cashTotal(null);
+        PurchaseType cash = purchaseTypes.findByNameIgnoreCase("Наличные").orElseThrow();
+
+        CashTotalDto total = reportService.cashTotal(null, cash.getId(), null);
         assertNotNull(total.getAmount());
+        assertEquals(cash.getId(), total.getPurchaseTypeId());
+        assertEquals("Наличные", total.getPurchaseTypeName());
         assertTrue(total.getAmount().signum() > 0, "выручка наличными должна быть положительной");
 
         Long shopId = shops.findAll().get(0).getId();
-        CashTotalDto perShop = reportService.cashTotal(shopId);
+        CashTotalDto perShop = reportService.cashTotal(shopId, cash.getId(), null);
         assertNotNull(perShop.getAmount());
         assertEquals(shopId, perShop.getShopId());
+
+        // другой тип оплаты тоже считается
+        PurchaseType card = purchaseTypes.findByNameIgnoreCase("Безналичные").orElseThrow();
+        CashTotalDto byCard = reportService.cashTotal(null, card.getId(), null);
+        assertNotNull(byCard.getAmount());
+        assertEquals("Безналичные", byCard.getPurchaseTypeName());
     }
 
     @Test

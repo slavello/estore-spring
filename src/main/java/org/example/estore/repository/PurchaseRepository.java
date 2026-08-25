@@ -32,8 +32,8 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     List<BestEmployeeRow> aggregateSalesSince(@Param("since") LocalDateTime since);
 
     /**
-     * Продажи умных часов сотрудниками определённой должности
-     * (для поиска лучшего младшего продавца-консультанта).
+     * Продажи выбранного товара сотрудниками выбранной должности за период
+     * с начальной даты (для поиска лучшего продавца товара).
      */
     @Query(
         "select p.id as positionId, p.name as positionName, e.id as employeeId, " +
@@ -43,32 +43,35 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         " join pu.employee e " +
         " join e.position p " +
         " join pu.electronics el " +
-        " join el.type t " +
-        "where lower(t.name) = lower(:typeName) and lower(p.name) = lower(:positionName) " +
+        "where el.id = :electronicsId and p.id = :positionId and pu.dateTime >= :since " +
         "group by p.id, p.name, e.id, e.lastName, e.firstName, e.middleName " +
         "order by count(pu.id) desc")
-    List<BestEmployeeRow> findSalesByTypeNameAndPositionName(
-        @Param("typeName") String typeName,
-        @Param("positionName") String positionName
+    List<BestEmployeeRow> findSalesByElectronicsIdAndPositionId(
+        @Param("electronicsId") Long electronicsId,
+        @Param("positionId") Long positionId,
+        @Param("since") LocalDateTime since
     );
 
-    /** Сумма денежных средств, полученных через оплату (по всей сети или по магазину) */
+    /** Сумма денежных средств, полученных через оплату выбранного типа за период с начальной даты (по всей сети) */
     @Query(
         "select coalesce(sum(el.price), 0) " +
         "from Purchase pu " +
         " join pu.electronics el " +
-        " join pu.purchaseType pt " +
-        "where lower(pt.name) = lower(:typeName)")
-    BigDecimal sumSoldAmountByPurchaseTypeName(@Param("typeName") String typeName);
+        "where pu.purchaseType.id = :purchaseTypeId and pu.dateTime >= :since")
+    BigDecimal sumSoldAmountByPurchaseTypeId(
+        @Param("purchaseTypeId") Long purchaseTypeId,
+        @Param("since") LocalDateTime since
+    );
 
+    /** Сумма денежных средств, полученных через оплату выбранного типа за период с начальной даты (по магазину) */
     @Query(
         "select coalesce(sum(el.price), 0) " +
         "from Purchase pu " +
         " join pu.electronics el " +
-        " join pu.purchaseType pt " +
-        "where lower(pt.name) = lower(:typeName) and pu.shop.id = :shopId")
-    BigDecimal sumSoldAmountByPurchaseTypeNameAndShop(
-        @Param("typeName") String typeName,
-        @Param("shopId") Long shopId
+        "where pu.purchaseType.id = :purchaseTypeId and pu.shop.id = :shopId and pu.dateTime >= :since")
+    BigDecimal sumSoldAmountByPurchaseTypeIdAndShop(
+        @Param("purchaseTypeId") Long purchaseTypeId,
+        @Param("shopId") Long shopId,
+        @Param("since") LocalDateTime since
     );
 }

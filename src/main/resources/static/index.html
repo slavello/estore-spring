@@ -41,13 +41,16 @@
             <h2>Отчёты</h2>
 
             <div class="card">
-                <h3>Лучшие сотрудники по должности <span class="muted">(за последний год - последние 12 месяцев)</span></h3>
+                <h3>Лучшие сотрудники по должности</h3>
                 <div class="row">
                     <label>Критерий:
                         <select id="best-criterion">
-                            <option value="count">Количество проданных товаров за последний год</option>
-                            <option value="sum">Сумма проданных товаров за последний год, руб.</option>
+                            <option value="count">Количество проданных товаров за период</option>
+                            <option value="sum">Сумма проданных товаров за период, руб.</option>
                         </select>
+                    </label>
+                    <label>С даты:
+                        <input type="date" id="best-since">
                     </label>
                     <button id="btn-best" class="primary">Показать</button>
                 </div>
@@ -55,18 +58,33 @@
             </div>
 
             <div class="card">
-                <h3>Лучший младший продавец-консультант по продаже умных часов</h3>
+                <h3>Лучший сотрудник по продаже выбранного товара</h3>
                 <div class="row">
+                    <label>Товар:
+                        <select id="best-product"><option value="">— выберите товар —</option></select>
+                    </label>
+                    <label>Должность:
+                        <select id="best-position"><option value="">— выберите должность —</option></select>
+                    </label>
+                    <label>С даты:
+                        <input type="date" id="product-since">
+                    </label>
                     <button id="btn-watch" class="primary">Показать</button>
                 </div>
                 <div id="watch-result"></div>
             </div>
 
             <div class="card">
-                <h3>Сумма денежных средств, полученная через оплату наличными</h3>
+                <h3>Сумма денежных средств, полученная через оплату выбранным способом</h3>
                 <div class="row">
+                    <label>Тип оплаты:
+                        <select id="pay-type"><option value="">— выберите тип —</option></select>
+                    </label>
                     <label>Магазин:
                         <select id="cash-shop"><option value="">— Вся сеть —</option></select>
+                    </label>
+                    <label>С даты:
+                        <input type="date" id="cash-since">
                     </label>
                     <button id="btn-cash" class="primary">Показать</button>
                 </div>

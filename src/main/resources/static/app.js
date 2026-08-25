@@ -535,19 +535,51 @@ function initReports() {
         const criterion = document.getElementById('best-criterion').value;
         const out = document.getElementById('best-result');
         try {
-            const rows = await api('/api/reports/best-employees?criterion=' + criterion);
+            let url = '/api/reports/best-employees?criterion=' + criterion;
+            if (bestSince.value) url += '&startDate=' + bestSince.value;
+            const rows = await api(url);
             out.innerHTML = renderBestEmployees(rows);
         } catch (e) {
             toast(e.message, 'err');
         }
     };
 
+    // отчёт по продажам выбранного товара среди сотрудников выбранной должности
+    const productSel = document.getElementById('best-product');
+    loadSelectOptions('/api/electronics?size=500').then(items => {
+        items.forEach(i => {
+            const o = document.createElement('option');
+            o.value = i.id;
+            o.textContent = i.name + ' (' + fmtMoney(i.price) + ')';
+            productSel.appendChild(o);
+        });
+    }).catch(() => {});
+
+    const posSel = document.getElementById('best-position');
+    loadSelectOptions('/api/positions?size=200').then(items => {
+        items.forEach(i => {
+            const o = document.createElement('option');
+            o.value = i.id;
+            o.textContent = i.name;
+            if (i.name === 'Младший продавец-консультант') o.selected = true;
+            posSel.appendChild(o);
+        });
+    }).catch(() => {});
+
     document.getElementById('btn-watch').onclick = async () => {
         const out = document.getElementById('watch-result');
+        if (!productSel.value || !posSel.value) {
+            toast('Выберите товар и должность для отчёта', 'err');
+            return;
+        }
         try {
-            const rows = await api('/api/reports/best-smartwatch-seller');
+            let url = '/api/reports/best-product-seller?electronicsId=' + productSel.value
+                + '&positionId=' + posSel.value;
+            const since = document.getElementById('product-since').value;
+            if (since) url += '&startDate=' + since;
+            const rows = await api(url);
             if (!rows.length) {
-                out.innerHTML = '<p class="muted">Данных нет: продажи умных часов младшими продавцами-консультантами не найдены.</p>';
+                out.innerHTML = '<p class="muted">Данных нет: сотрудники этой должности не продавали этот товар за выбранный период.</p>';
                 return;
             }
             out.innerHTML = renderBestEmployees(rows);
@@ -566,13 +598,34 @@ function initReports() {
         });
     }).catch(() => {});
 
+    // тип оплаты для отчёта о полученных денежных средствах
+    const payType = document.getElementById('pay-type');
+    loadSelectOptions('/api/purchase-types?size=100').then(items => {
+        items.forEach(i => {
+            const o = document.createElement('option');
+            o.value = i.id;
+            o.textContent = i.name;
+            if (i.name === 'Наличные') o.selected = true;
+            payType.appendChild(o);
+        });
+    }).catch(() => {});
+
     document.getElementById('btn-cash').onclick = async () => {
         const out = document.getElementById('cash-result');
+        if (!payType.value) {
+            toast('Выберите тип оплаты', 'err');
+            return;
+        }
         const shopId = cashShop.value;
         try {
-            const r = await api('/api/reports/cash-total' + (shopId ? '?shopId=' + shopId : ''));
+            let url = '/api/reports/cash-total?purchaseTypeId=' + payType.value
+                + (shopId ? '&shopId=' + shopId : '');
+            const since = document.getElementById('cash-since').value;
+            if (since) url += '&startDate=' + since;
+            const r = await api(url);
             const place = r.shopName ? esc(r.shopName) : 'вся сеть магазинов';
-            out.innerHTML = `<p>Получено наличными (<b>${place}</b>): <span class="big-amount">${fmtMoney(r.amount)}</span></p>`;
+            out.innerHTML = `<p>Получено («${esc(r.purchaseTypeName)}», <b>${place}</b>): ` +
+                `<span class="big-amount">${fmtMoney(r.amount)}</span></p>`;
         } catch (e) {
             toast(e.message, 'err');
         }
@@ -585,8 +638,8 @@ function renderBestEmployees(rows) {
     }
     let html = '<table class="data"><thead><tr>' +
         '<th>Должность</th><th>Лучший сотрудник</th>' +
-        '<th>Кол-во проданных товаров (за последний год)</th>' +
-        '<th>Сумма проданных товаров за последний год, руб.</th>' +
+        '<th>Кол-во проданных товаров (за выбранный период)</th>' +
+        '<th>Сумма проданных товаров за выбранный период, руб.</th>' +
         '</tr></thead><tbody>';
     rows.forEach(r => {
         html += `<tr><td>${esc(r.positionName)}</td><td>${esc(r.fullName)}</td>` +
