@@ -722,7 +722,7 @@ public class CsvImportService {
         boolean missing = false;
         for (String col : required) {
             if (findColumn(t, col) == null) {
-                r.getErrors().add("не найдена обязательная колонка «" + col + "»");
+                r.getErrors().add("не найдена обязательная колонка \"" + col + "\"");
                 missing = true;
             }
         }

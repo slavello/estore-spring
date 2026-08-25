@@ -80,13 +80,12 @@ public class PurchaseService {
     }
 
     /**
-     * Редактирование покупки: ранее проданный товар возвращается на склад,
-     * затем выполняется проверка и списание по новым данным.
+     * Редактирование покупки
      */
     @Transactional
     public PurchaseDto update(Long id, PurchaseDto d) {
         Purchase p = find(id);
-        releaseSale(p.getElectronics(), p.getShop());
+        //releaseSale(p.getElectronics(), p.getShop());
 
         p.setElectronics(resolveElectronics(d.getElectronicsId()));
         p.setEmployee(resolveEmployee(d.getEmployeeId()));
@@ -95,7 +94,7 @@ public class PurchaseService {
         if (d.getDateTime() != null) {
             p.setDateTime(d.getDateTime());
         }
-        registerSale(p.getElectronics(), p.getShop());
+        //registerSale(p.getElectronics(), p.getShop());
         return toDto(purchases.save(p));
     }
 
@@ -111,7 +110,7 @@ public class PurchaseService {
     public void registerSale(Electronics el, Shop shop) {
         if (Boolean.TRUE.equals(el.getArchived())) {
             throw new OutOfStockException(String.format(
-                "Товар «%s» снят с продаж (архивный). Покупка не оформлена.", el.getName())
+                "Товар \"%s\" снят с продаж (архивный). Покупка не оформлена.", el.getName())
             );
         }
         ShopStock stock = stocks.findByElectronicsIdAndShopId(el.getId(), shop.getId()).orElse(null);
@@ -119,7 +118,7 @@ public class PurchaseService {
         int totalAvailable = el.getQuantity() != null ? el.getQuantity() : 0;
         if (availableInShop <= 0 || totalAvailable <= 0) {
             throw new OutOfStockException(String.format(
-                "Товара «%s» нет в наличии в магазине «%s». Покупка не оформлена.", el.getName(), shop.getName())
+                "Товара \"%s\" нет в наличии в магазине \"%s\". Покупка не оформлена.", el.getName(), shop.getName())
             );
         }
         stock.setQuantity(availableInShop - 1);

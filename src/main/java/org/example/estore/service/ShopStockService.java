@@ -35,7 +35,7 @@ public class ShopStockService {
         return stocks.findAll(pageable).map(this::toDto);
     }
 
-    /** Создание или обновление остатка по паре "товар — магазин" */
+    /** Создание или обновление остатка по паре "товар-магазин" */
     @Transactional
     public ShopStockDto save(ShopStockDto d) {
         Electronics el = electronics
