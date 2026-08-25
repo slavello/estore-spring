@@ -77,29 +77,29 @@ public class CsvImportService {
      */
     private final List<TableStep> stepsList = List.of(
         new TableStep("positions",
-            List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
-        new TableStep("shops",
-            List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
-        new TableStep("electronics_types",
-            List.of(
-                "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
-                "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
-            this::handleElectronicsTypes),
+            List.of("positions", "должности"), this::handlePositions),
         new TableStep("purchase_types",
             List.of(
-                "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
-                "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
+                "purchasetypes", "purchase_types",
+                "типыпокупок", "типы_покупок", "типпокупки", "тип_покупки"),
             this::handlePurchaseTypes),
+        new TableStep("shops",
+            List.of("shops", "stores", "магазины", "магазин"), this::handleShops),
         new TableStep("employees",
-            List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
+            List.of("employees", "employee", "сотрудники", "сотрудник"), this::handleEmployees),
+        new TableStep("electronics_types",
+            List.of(
+                "electronics_types", "electronicstypes", "electronics_type", "electronicstype",
+                "типыэлектроники", "типы_электроники", "типэлектроники", "тип_электроники"),
+            this::handleElectronicsTypes),
         new TableStep("electronics",
-            List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
+            List.of("electronics", "электротовары", "электротовар", "электро_товары", "электро_товар", "товар"),
             this::handleElectronics),
         new TableStep("stocks",
-            List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
+            List.of("stocks", "shopstocks", "shop_stocks", "наличие", "остатки"),
             this::handleStocks),
         new TableStep("purchases",
-            List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
+            List.of("purchases", "покупки", "покупка"), this::handlePurchases)
     );
 
     public CsvImportService(
@@ -123,10 +123,13 @@ public class CsvImportService {
         this.purchases = purchases;
         this.purchaseService = purchaseService;
 
-        // this.stepsList = makeSteps();
-        this.stepsMap = this.stepsList.stream().collect(Collectors.toMap(
-            s -> s.name, s -> s
-        ));
+        this.stepsMap = new HashMap<>();
+        for (TableStep s : this.stepsList) {
+            stepsMap.put(normalizeFileName(s.name), s);
+            for (String alias : s.aliases) {
+                stepsMap.putIfAbsent(normalizeFileName(alias), s);
+            }
+        }
     }
 
     @Transactional
@@ -231,6 +234,7 @@ public class CsvImportService {
 
     private void process(Map<String, List<String>> filesByName, ImportResultDto result) {
         for (TableStep step : stepsList) {
+            System.out.println(step.name);
             String key = findFileKey(filesByName, step);
             if (key == null) {
                 continue; // файла нет в архиве — шаг пропускается
@@ -256,42 +260,13 @@ public class CsvImportService {
         }
     }
 
-//    private List<TableStep> makeSteps() {
-//        return List.of(
-//            new TableStep("positions",
-//                List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
-//            new TableStep("shops",
-//                List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
-//            new TableStep("electronics_types",
-//                List.of(
-//                    "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
-//                    "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
-//                this::handleElectronicsTypes),
-//            new TableStep("purchase_types",
-//                List.of(
-//                    "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
-//                    "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
-//                this::handlePurchaseTypes),
-//            new TableStep("employees",
-//                List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
-//            new TableStep("electronics",
-//                List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
-//                this::handleElectronics),
-//            new TableStep("stocks",
-//                List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
-//                this::handleStocks),
-//            new TableStep("purchases",
-//                List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
-//        );
-//    }
-
     private String stepNames() {
         StringBuilder sb = new StringBuilder();
-        for (String name : stepsMap.keySet()) {
+        for (TableStep step : stepsList) {
             if (sb.length() > 0) {
                 sb.append(", ");
             }
-            sb.append(name);
+            sb.append(step.name);
         }
         return sb.toString();
     }
@@ -302,13 +277,7 @@ public class CsvImportService {
             return null;
         }
         String normalized = normalizeFileName(tableName);
-        // return stepsMap.get(normalized);
-        for (TableStep s : stepsList) {
-            if (s.aliases.contains(normalized)) {
-                return s;
-            }
-        }
-        return null;
+        return stepsMap.get(normalized);
     }
 
     private String fileNameOrFallback(MultipartFile file) {
@@ -923,7 +892,7 @@ public class CsvImportService {
         if (base.endsWith(".csv")) {
             base = base.substring(0, base.length() - 4);
         }
-        return normalizeToken(base);
+        return normalizeToken(base).toLowerCase(Locale.ROOT);
     }
 
     private String stripBom(String s) {
