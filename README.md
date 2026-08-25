@@ -31,8 +31,16 @@ Backend на Spring Boot предоставляет REST API (Swagger), данн
 
 ## Запуск
 
+Сборка и запуск тестов:
+
 ```bash
 mvn clean package
+java -jar target/estore-spring-1.0-SNAPSHOT.jar
+```
+
+Запуск проекта:
+
+```bash
 java -jar target/estore-spring-1.0-SNAPSHOT.jar
 ```
 
@@ -67,9 +75,3 @@ java -jar target/estore-spring-1.0-SNAPSHOT.jar
 * «Последний год» = скользящий период 12 месяцев от текущей даты/времени.
 * Удаление/изменение покупки возвращает товар на склад.
 * Backend и frontend разделены: frontend — статические файлы, вся работа с данными только через REST API.
-
-## Сборка и тесты
-
-```bash
-mvn clean verify        # юнит-тесты парсера CSV + интеграционные smoke-тесты на H2
-```

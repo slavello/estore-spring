@@ -70,7 +70,37 @@ public class CsvImportService {
     private final Map<Class<?>, Map<Long, Object>> idMappings = new HashMap<>();
 
     private final Map<String, TableStep> stepsMap;
-    private final List<TableStep> stepsList;
+
+    /**
+     * Реестр шагов импорта.
+     * Порядок соответствует внешним ключам: сначала справочники, затем реестры.
+     */
+    private final List<TableStep> stepsList = List.of(
+        new TableStep("positions",
+            List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
+        new TableStep("shops",
+            List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
+        new TableStep("electronics_types",
+            List.of(
+                "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
+                "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
+            this::handleElectronicsTypes),
+        new TableStep("purchase_types",
+            List.of(
+                "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
+                "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
+            this::handlePurchaseTypes),
+        new TableStep("employees",
+            List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
+        new TableStep("electronics",
+            List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
+            this::handleElectronics),
+        new TableStep("stocks",
+            List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
+            this::handleStocks),
+        new TableStep("purchases",
+            List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
+    );
 
     public CsvImportService(
         PositionRepository positions,
@@ -93,7 +123,7 @@ public class CsvImportService {
         this.purchases = purchases;
         this.purchaseService = purchaseService;
 
-        this.stepsList = makeSteps();
+        // this.stepsList = makeSteps();
         this.stepsMap = this.stepsList.stream().collect(Collectors.toMap(
             s -> s.name, s -> s
         ));
@@ -226,38 +256,34 @@ public class CsvImportService {
         }
     }
 
-    /**
-     * Реестр шагов импорта.
-     * Порядок соответствует внешним ключам: сначала справочники, затем реестры.
-     */
-    private List<TableStep> makeSteps() {
-        return List.of(
-            new TableStep("positions",
-                List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
-            new TableStep("shops",
-                List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
-            new TableStep("electronics_types",
-                List.of(
-                    "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
-                    "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
-                this::handleElectronicsTypes),
-            new TableStep("purchase_types",
-                List.of(
-                    "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
-                    "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
-                this::handlePurchaseTypes),
-            new TableStep("employees",
-                List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
-            new TableStep("electronics",
-                List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
-                this::handleElectronics),
-            new TableStep("stocks",
-                List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
-                this::handleStocks),
-            new TableStep("purchases",
-                List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
-        );
-    }
+//    private List<TableStep> makeSteps() {
+//        return List.of(
+//            new TableStep("positions",
+//                List.of("POSITIONS", "ДОЛЖНОСТИ"), this::handlePositions),
+//            new TableStep("shops",
+//                List.of("SHOPS", "STORES", "МАГАЗИНЫ", "МАГАЗИН"), this::handleShops),
+//            new TableStep("electronics_types",
+//                List.of(
+//                    "ELECTRONICSTYPES", "ETYPES", "TYPES", "ELECTRONICS_TYPES",
+//                    "ТИПЫЭЛЕКТРОНИКИ", "ТИПЫ_ЭЛЕКТРОНИКИ", "ТИП_ЭЛЕКТРОНИКИ", "ТИПЫ"),
+//                this::handleElectronicsTypes),
+//            new TableStep("purchase_types",
+//                List.of(
+//                    "PURCHASETYPES", "PTYPES", "PAYMENTTYPES", "PURCHASE_TYPES",
+//                    "ТИПЫПОКУПОК", "ТИПЫ_ПОКУПКИ", "ТИП_ПОКУПКИ"),
+//                this::handlePurchaseTypes),
+//            new TableStep("employees",
+//                List.of("EMPLOYEES", "СОТРУДНИКИ", "СОТРУДНИК"), this::handleEmployees),
+//            new TableStep("electronics",
+//                List.of("ELECTRONICS", "PRODUCTS", "GOODS", "ЭЛЕКТРОТОВАРЫ", "ТОВАРЫ"),
+//                this::handleElectronics),
+//            new TableStep("stocks",
+//                List.of("STOCKS", "SHOPSTOCKS", "SHOP_STOCKS", "НАЛИЧИЕ", "ОСТАТКИ"),
+//                this::handleStocks),
+//            new TableStep("purchases",
+//                List.of("PURCHASES", "ПОКУПКИ", "ПОКУПКА"), this::handlePurchases)
+//        );
+//    }
 
     private String stepNames() {
         StringBuilder sb = new StringBuilder();
